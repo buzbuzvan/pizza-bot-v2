@@ -67,19 +67,19 @@ orders_db: dict[int, OrderInDB] = {}
 
 
 def get_order_or_404(order_id: Annotated[int, Path(ge=1)]):
-    
-    
-    if order := orders_db.get(order_id):
+
+    order = orders_db.get(order_id)
+    if order is not None:
         return order
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
 
-VerifyId = Annotated[OrderInDB, Depends(get_order_or_404)]
+OrderFromPath = Annotated[OrderInDB, Depends(get_order_or_404)]
 
 
 @app.get("/orders/{order_id}", response_model=OrderOut)
 def show_order(
-    order_in_db: VerifyId,
+    order_in_db: OrderFromPath,
 ):
 
     return order_in_db
@@ -87,16 +87,16 @@ def show_order(
 
 def insert_order_into_db(order: Order, total: float):
 
-    into_db = OrderInDB(items=order.items, total=total)
-    id = next(counter)
-    into_db.id = id
-    orders_db[id] = into_db
+    saved_order = OrderInDB(items=order.items, total=total)
+    order_id = next(counter)
+    saved_order.id = order_id
+    orders_db[order_id] = saved_order
 
-    return into_db
+    return saved_order
 
 
 def order_total(order: Order):
-    total : float = 0 
+    total: float = 0
     for item in order.items:
         amount = item.count * prices[item.name] * sizes[item.size]
         total += amount
@@ -112,13 +112,13 @@ def create_order(order: Order):
 
     total = order_total(order)
 
-    into_db = insert_order_into_db(order, total)
-    return into_db
+    saved_order = insert_order_into_db(order, total)
+    return saved_order
 
 
 @app.put("/orders/{order_id}/internal_note", status_code=status.HTTP_204_NO_CONTENT)
 def update_internal_note(
-    order_in_db: VerifyId,
+    order_in_db: OrderFromPath,
     data: InternalNoteUpdate,
 ):
 
@@ -127,7 +127,7 @@ def update_internal_note(
 
 @app.put("/orders/{order_id}/status", status_code=status.HTTP_204_NO_CONTENT)
 def update_status(
-    order_in_db: VerifyId,
+    order_in_db: OrderFromPath,
     data: StatusUpdate,
 ):
 
