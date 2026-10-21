@@ -16,15 +16,25 @@ DROP TABLE IF EXISTS "ingredients";
 
 DROP TABLE IF EXISTS "pizzas";
 
+DROP TABLE IF EXISTS "kitchen_wait";
+
 DROP TYPE IF EXISTS "status_type";
 
 CREATE TYPE "status_type" AS ENUM('Pending', 'Canceled', 'Confirmed', 'Ready');
+
+CREATE TABLE "kitchen_wait" (
+    "id" INT PRIMARY KEY DEFAULT 1,
+    "wait_minutes" INT NOT NULL DEFAULT 10,
+    CONSTRAINT "chk_kitchen_wait_id" CHECK("id" = 1),
+    CONSTRAINT "chk_wait_minutes" CHECK("wait_minutes" >= 10 AND "wait_minutes" <= 40)
+);
 
 CREATE TABLE "pizzas" (
     "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "name" VARCHAR(32) NOT NULL UNIQUE,
     "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
-    "price" DECIMAL(7,2) NOT NULL CHECK("price" > 0)
+    "price" DECIMAL(7,2) NOT NULL,
+    CONSTRAINT "chk_pizza_price" CHECK("price" > 0)
 );
 
 CREATE TABLE "ingredients" (
@@ -32,41 +42,52 @@ CREATE TABLE "ingredients" (
     "name" VARCHAR(32) NOT NULL UNIQUE
 );
 
-CREATE TABLE "customers"(
+CREATE TABLE "customers" (
     "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    "name" VARCHAR(32) NOT NULL
+    "phone" VARCHAR(16) NOT NULL UNIQUE,
+    CONSTRAINT "chk_phone_e164" CHECK("phone" ~ '^\+[1-9]\d{6,14}$')
 );
 
-CREATE TABLE "sizes"(
+CREATE TABLE "sizes" (
     "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "size" VARCHAR(32) NOT NULL UNIQUE,
     "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
-    "multiplier" DECIMAL(7,2) NOT NULL CHECK("multiplier" > 0)
+    "multiplier" DECIMAL(7,2) NOT NULL,
+    CONSTRAINT "chk_multiplier" CHECK("multiplier" > 0)
 );
 
 CREATE TABLE "orders" (
     "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "ready_by" TIMESTAMPTZ,
     "customer_id" BIGINT NOT NULL,
-    "status" "status_type" NOT NULL DEFAULT ('Pending'),
-    "total" DECIMAL(7,2) NOT NULL CHECK("total" > 0),
+    "status" "status_type" NOT NULL DEFAULT 'Pending',
+    "total" DECIMAL(7,2) NOT NULL,
     "internal_note" VARCHAR(100),
+    CONSTRAINT "chk_order_total" CHECK("total" > 0),
+    CONSTRAINT "chk_ready_by" CHECK(
+        "ready_by" IS NULL OR "ready_by" > "created_at"
+    ),
+    CONSTRAINT "chk_status_ready_by" CHECK(
+        ("ready_by" IS NOT NULL) = ("status" IN ('Confirmed', 'Ready'))
+    ),
     FOREIGN KEY("customer_id") REFERENCES "customers"("id")
 );
 
-CREATE TABLE "order_items"(
+CREATE TABLE "order_items" (
     "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "order_id" BIGINT NOT NULL,
     "pizza_id" BIGINT NOT NULL,
     "size_id" BIGINT NOT NULL,
-    "price" DECIMAL(7,2) NOT NULL CHECK("price" > 0),
+    "price" DECIMAL(7,2) NOT NULL,
     "comment" VARCHAR(100),
+    CONSTRAINT "chk_order_item_price" CHECK("price" > 0),
     FOREIGN KEY("order_id") REFERENCES "orders"("id") ON DELETE CASCADE,
     FOREIGN KEY("size_id") REFERENCES "sizes"("id"),
     FOREIGN KEY("pizza_id") REFERENCES "pizzas"("id")
 );
 
-CREATE TABLE "pizza_ingredients"(
+CREATE TABLE "pizza_ingredients" (
     "pizza_id" BIGINT NOT NULL,
     "ingredient_id" BIGINT NOT NULL,
     PRIMARY KEY("pizza_id", "ingredient_id"),
@@ -74,18 +95,20 @@ CREATE TABLE "pizza_ingredients"(
     FOREIGN KEY("ingredient_id") REFERENCES "ingredients"("id")
 );
 
-CREATE TABLE "toppings"(
+CREATE TABLE "toppings" (
     "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "ingredient_id" BIGINT NOT NULL UNIQUE,
-    "price" DECIMAL(7,2) NOT NULL CHECK("price" > 0),
+    "price" DECIMAL(7,2) NOT NULL,
     "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT "chk_topping_price" CHECK("price" > 0),
     FOREIGN KEY("ingredient_id") REFERENCES "ingredients"("id")
 );
 
-CREATE TABLE "order_toppings"(
+CREATE TABLE "order_toppings" (
     "order_item_id" BIGINT NOT NULL,
     "topping_id" BIGINT NOT NULL,
-    "price" DECIMAL(7,2) NOT NULL CHECK("price" > 0),
+    "price" DECIMAL(7,2) NOT NULL,
+    CONSTRAINT "chk_order_topping_price" CHECK("price" > 0),
     PRIMARY KEY("order_item_id", "topping_id"),
     FOREIGN KEY("order_item_id") REFERENCES "order_items"("id") ON DELETE CASCADE,
     FOREIGN KEY("topping_id") REFERENCES "toppings"("id")
@@ -99,3 +122,7 @@ ON "order_items" ("order_id");
 
 CREATE INDEX "order_items_pizza_id_size_id_idx"
 ON "order_items" ("pizza_id", "size_id");
+
+CREATE INDEX "orders_created_at_idx"
+ON "orders" ("created_at");
+
