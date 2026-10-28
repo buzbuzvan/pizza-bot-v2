@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS "order_soft_drinks";
+
 DROP TABLE IF EXISTS "order_toppings";
 
 DROP TABLE IF EXISTS "toppings";
@@ -13,6 +15,8 @@ DROP TABLE IF EXISTS "sizes";
 DROP TABLE IF EXISTS "customers";
 
 DROP TABLE IF EXISTS "ingredients";
+
+DROP TABLE IF EXISTS "soft_drinks";
 
 DROP TABLE IF EXISTS "pizzas";
 
@@ -35,6 +39,14 @@ CREATE TABLE "pizzas" (
     "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
     "price" DECIMAL(7,2) NOT NULL,
     CONSTRAINT "chk_pizza_price" CHECK("price" > 0)
+);
+
+CREATE TABLE "soft_drinks" (
+    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "name" VARCHAR(32) NOT NULL UNIQUE,
+    "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
+    "price" DECIMAL(7,2) NOT NULL,
+    CONSTRAINT "chk_soft_drink_price" CHECK("price" > 0)
 );
 
 CREATE TABLE "ingredients" (
@@ -98,8 +110,8 @@ CREATE TABLE "pizza_ingredients" (
 CREATE TABLE "toppings" (
     "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "ingredient_id" BIGINT NOT NULL UNIQUE,
-    "price" DECIMAL(7,2) NOT NULL,
     "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
+    "price" DECIMAL(7,2) NOT NULL,
     CONSTRAINT "chk_topping_price" CHECK("price" > 0),
     FOREIGN KEY("ingredient_id") REFERENCES "ingredients"("id")
 );
@@ -112,6 +124,18 @@ CREATE TABLE "order_toppings" (
     PRIMARY KEY("order_item_id", "topping_id"),
     FOREIGN KEY("order_item_id") REFERENCES "order_items"("id") ON DELETE CASCADE,
     FOREIGN KEY("topping_id") REFERENCES "toppings"("id")
+);
+
+CREATE TABLE "order_soft_drinks" (
+    "order_id" BIGINT NOT NULL,
+    "soft_drink_id" BIGINT NOT NULL,
+    "quantity" INT NOT NULL,
+    "price" DECIMAL(7,2) NOT NULL,
+    PRIMARY KEY ("order_id", "soft_drink_id"),
+    CONSTRAINT "chk_order_soft_drink_quantity" CHECK("quantity" >= 1 AND "quantity" <= 25),
+    CONSTRAINT "chk_soft_drink_price" CHECK("price" > 0),
+    FOREIGN KEY("order_id") REFERENCES "orders"("id") ON DELETE CASCADE,
+    FOREIGN KEY("soft_drink_id") REFERENCES "soft_drinks"("id")
 );
 
 CREATE INDEX "orders_customer_id_created_at_idx"
